@@ -6,11 +6,11 @@ from google.api_core.exceptions import Forbidden, NotFound
 
 # ================= CONFIG =================
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")  # must be set
-BUCKET_NAME = os.getenv("GCS_BUCKET")         # must be set
+BUCKET_NAME = os.getenv("GCS_BUCKET")        # must be set
 # ==========================================
 
-BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-"
-MONTHS = [f"{i:02d}" for i in range(1, 7)]  # Jan–Jun
+BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_2019-"
+MONTHS = [f"{i:02d}" for i in range(1, 13)]  # Jan–Dec
 DOWNLOAD_DIR = "data"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -39,13 +39,13 @@ def create_bucket_if_needed(client):
         client.create_bucket(bucket)
         print(f"✅ Bucket created: {BUCKET_NAME}")
     except Forbidden:
-        print(f"❌ Bucket name not available: {BUCKET_NAME}")
-        print("Pick a new globally-unique bucket name")
+        print(f"❌ Bucket name not available or not permitted: {BUCKET_NAME}")
+        print("Pick a new globally-unique bucket name (and ensure you have permission).")
         sys.exit(1)
 
-def download_file(month):
+def download_file(month: str) -> str:
     url = f"{BASE_URL}{month}.parquet"
-    local_path = os.path.join(DOWNLOAD_DIR, f"yellow_tripdata_2024-{month}.parquet")
+    local_path = os.path.join(DOWNLOAD_DIR, f"green_tripdata_2019-{month}.parquet")
 
     if os.path.exists(local_path):
         print(f"Skipping download (exists): {local_path}")
@@ -55,7 +55,7 @@ def download_file(month):
     urllib.request.urlretrieve(url, local_path)
     return local_path
 
-def upload_file(client, local_path):
+def upload_file_and_cleanup(client, local_path: str):
     bucket = client.bucket(BUCKET_NAME)
     blob_name = os.path.basename(local_path)
     blob = bucket.blob(blob_name)
@@ -64,18 +64,26 @@ def upload_file(client, local_path):
     blob.upload_from_filename(local_path)
     print(f"✅ Uploaded gs://{BUCKET_NAME}/{blob_name}")
 
+    # ✅ Free disk space immediately
+    try:
+        os.remove(local_path)
+        print(f"🧹 Deleted local file: {local_path}")
+    except FileNotFoundError:
+        pass
+
 def main():
     preflight()
 
     client = storage.Client(project=GCP_PROJECT_ID)
-
     create_bucket_if_needed(client)
 
+    uploaded = 0
     for month in MONTHS:
         file_path = download_file(month)
-        upload_file(client, file_path)
+        upload_file_and_cleanup(client, file_path)
+        uploaded += 1
 
-    print("\n🎉 DONE — 6 files uploaded to GCS")
+    print(f"\n🎉 DONE — {uploaded} files uploaded to GCS")
 
 if __name__ == "__main__":
     main()
