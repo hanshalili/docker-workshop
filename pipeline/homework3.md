@@ -5,7 +5,7 @@ Question 1
 SELECT COUNT(*)
 FROM `dtc-kestra-project.zoomcamp_module_3.yellow_2024_external`;
 
-Answer: 20,332,093
+Answer: 20,332,093.
 
 
 Question 2
